@@ -1,9 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Toolbar } from './components/Toolbar';
 import { Canvas } from './components/Canvas';
+import { LayersPanel } from './components/LayersPanel';
+import { SavedShapesPanel } from './components/SavedShapesPanel';
 import { Pencil } from 'lucide-react';
+import { initDb } from './lib/db';
 
-function App() {
+export default function App() {
+  useEffect(() => {
+    initDb().catch(console.error);
+  }, []);
+
   return (
     <div className="h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
@@ -19,9 +26,9 @@ function App() {
       <main className="flex-1 relative overflow-hidden">
         <Toolbar />
         <Canvas />
+        <LayersPanel />
+        <SavedShapesPanel />
       </main>
     </div>
   );
 }
-
-export default App;
