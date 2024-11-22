@@ -10,28 +10,27 @@ export function Canvas() {
   
   const { 
     elements, 
-    selectedElement, 
+    selectedElements,
     connectingFrom,
-    setSelectedElement,
+    setSelectedElements,
+    toggleSelectedElement,
     setConnectingFrom,
     addElement,
     removeElement 
   } = useDiagramStore();
 
-  // Global keyboard event listeners
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'c' && !e.repeat) {
         e.preventDefault();
         setIsConnectMode(true);
-        // Clear connecting state when entering connect mode
         setConnectingFrom(null);
       }
       
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElement) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElements.length > 0) {
         e.preventDefault();
-        removeElement(selectedElement);
-        setSelectedElement(null);
+        selectedElements.forEach(id => removeElement(id));
+        setSelectedElements([]);
       }
     };
 
@@ -50,7 +49,7 @@ export function Canvas() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [selectedElement, removeElement, setSelectedElement, setConnectingFrom]);
+  }, [selectedElements, removeElement, setSelectedElements, setConnectingFrom]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -95,19 +94,20 @@ export function Canvas() {
     addElement(element);
   };
 
-  const handleElementSelect = useCallback((id: string) => {
+  const handleElementSelect = useCallback((id: string, event: React.MouseEvent) => {
     if (!isConnectMode) {
-      setSelectedElement(id);
+      if (event.shiftKey) {
+        toggleSelectedElement(id);
+      } else {
+        setSelectedElements([id]);
+      }
       return;
     }
 
-    // In connect mode
     if (!connectingFrom) {
-      // First shape selection in connect mode
       setConnectingFrom(id);
-      setSelectedElement(id);
+      setSelectedElements([id]);
     } else if (connectingFrom !== id) {
-      // Second shape selection - create connection
       const connectionId = Math.random().toString(36).substr(2, 9);
       addElement({
         id: connectionId,
@@ -116,10 +116,9 @@ export function Canvas() {
         to: id,
         position: { x: 0, y: 0 },
       });
-      // Clear connecting state but maintain connect mode
       setConnectingFrom(null);
     }
-  }, [isConnectMode, connectingFrom, setSelectedElement, setConnectingFrom, addElement]);
+  }, [isConnectMode, connectingFrom, setSelectedElements, toggleSelectedElement, setConnectingFrom, addElement]);
 
   const getElementCenter = (element: DiagramElement): Position => {
     return {
@@ -132,18 +131,18 @@ export function Canvas() {
     const fromElement = elements.find(el => el.id === element.from);
     const toElement = elements.find(el => el.id === element.to);
     
-    if (!fromElement || !toElement) return null;
+    if (!fromElement || !toElement || fromElement.isHidden || toElement.isHidden) return null;
 
     const from = getElementCenter(fromElement);
     const to = getElementCenter(toElement);
 
-    const isSelected = selectedElement === element.id;
+    const isSelected = selectedElements.includes(element.id);
 
     return (
       <svg
         key={element.id}
         className="absolute top-0 left-0 w-full h-full pointer-events-none"
-        style={{ zIndex: 0 }}
+        style={{ zIndex: element.zIndex || 0 }}
       >
         <line
           x1={from.x}
@@ -155,13 +154,17 @@ export function Canvas() {
           className="pointer-events-auto cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
-            handleElementSelect(element.id);
+            handleElementSelect(element.id, e);
           }}
           markerEnd="url(#arrowhead)"
         />
       </svg>
     );
   };
+
+  const sortedElements = [...elements].sort((a, b) => 
+    (a.zIndex || 0) - (b.zIndex || 0)
+  );
 
   return (
     <div
@@ -173,7 +176,7 @@ export function Canvas() {
       onDrop={handleDrop}
       onClick={(e) => {
         if (e.target === canvasRef.current) {
-          setSelectedElement(null);
+          setSelectedElements([]);
           setConnectingFrom(null);
         }
       }}
@@ -203,19 +206,19 @@ export function Canvas() {
           </marker>
         </defs>
       </svg>
-      {elements.map((element) =>
+      {sortedElements.map((element) =>
         element.type === 'connection' ? (
           renderConnection(element)
-        ) : (
+        ) : !element.isHidden ? (
           <DraggableElement
             key={element.id}
             element={element}
-            isSelected={selectedElement === element.id}
+            isSelected={selectedElements.includes(element.id)}
             isConnecting={connectingFrom === element.id}
             onSelect={handleElementSelect}
             isConnectMode={isConnectMode}
           />
-        )
+        ) : null
       )}
     </div>
   );
